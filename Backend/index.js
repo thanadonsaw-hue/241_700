@@ -1,14 +1,16 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const mysql = require('mysql2/promise');
+const bodyParser = require('body-parser');
 const app = express();
+const port = 8000;
+const cors = require('cors');
+
+app.use(cors());
 
 app.use(bodyParser.json());
 
-const port = 8000;
-
 let conn = null;
-const initMysql = async () => {
+const initMySQL = async () => {
     conn = await mysql.createConnection({
         host: 'localhost',
         user: 'root',
@@ -19,40 +21,35 @@ const initMysql = async () => {
     console.log('Connected to MySQL database');
 }
 
-//path: = GET /users สำหรับดึงข้อมูล users ทั้งหมด
 app.get('/users', async (req, res) => {
-    try {
-        const result = await conn.query('SELECT * FROM users');
-        res.json(result[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+    const results = await conn.query('SELECT * FROM users');
+    res.json(results)
+})
 
-//path: = POST /users สำหรับเพิ่ม users ใหม่
-app.post('/user', async (req, res) => {
+
+app.post('/users', async (req, res) => {
     try {
         let user = req.body;
-        const result = await conn.query('INSERT INTO users SET ?', user);
+        const results = await conn.query('INSERT INTO users SET ?', user);
+        console.log('results:', results);
         res.json({
-            Message: 'User added successfully',
-            data: result[0]
+            message: 'User added successfully',
+            data: results[0]
         });
     } catch (error) {
         console.error('Error inserting user:', error);
         res.status(500).json({ message: 'Error adding user' });
     }
-});
+})
 
-//path: = GET /users/:id สำหรับดึงข้อมูล user ตาม id
 app.get('/users/:id', async (req, res) => {
     try {
         let id = req.params.id;
-        const result = await conn.query('SELECT * FROM users WHERE id = ?', id);
-        if (result[0].length === 0) {
-            throw { statusCode: 404, message: 'User not found' };
+        const results = await conn.query('SELECT * FROM users WHERE id = ?', id);
+        if(results[0].length == 0){
+            throw{statusCode:404,message:'User not found'};
         }
-        res.json(result[0][0]);
+        res.json(results[0][0]);
     } catch (error) {
         console.error('Error fetching user:', error);
         let statusCode = error.statusCode || 500;
@@ -60,99 +57,65 @@ app.get('/users/:id', async (req, res) => {
             message: error.message || 'Error fetching user'
         });
     }
-});
+})
 
-//path: = PUT /users/:id สำหรับแก้ไขข้อมูล user ตาม id
 app.put('/users/:id', async (req, res) => {
     try {
         let id = req.params.id;
         let updatedUser = req.body;
-        const result = await conn.query('UPDATE users SET ? WHERE id = ?', [updatedUser, id]);
+        const results = await conn.query('UPDATE users SET ? WHERE id = ?', [updatedUser, id]);
         res.json({
-            Message: 'User updated successfully',
-            data: result[0]
+            message: 'User updated successfully',
+            data: results[0]
         });
     } catch (error) {
-        console.error('Error updating user:', error);
-        res.status(500).json({ error: error.message });
+        console.log('Error updating user:', error);
+        res.status(500).json({ message: 'Error updating user' });
     }
 });
 
-//path: = DELETE /users/:id สำหรับลบ user ตาม id
+//path: = DELETE /users/:id for delete user by id
 app.delete('/users/:id', async (req, res) => {
     try {
         let id = req.params.id;
-        const result = await conn.query('DELETE FROM users WHERE id = ?', id);
+        const results = await conn.query('DELETE FROM users WHERE id = ?', id);
         res.json({
-            Message: 'User deleted successfully',
-            data: result[0]
+            message: 'User deleted successfully',
+            data: results[0]
         });
-    } catch (err) {
-        console.error('Error deleting user:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/testdb2', async (req, res) => {
-    try {
-        const result = await conn.query('SELECT * FROM users');
-        res.json(result[0]);
     } catch (error) {
-        console.error('Error connecting to the database:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.log('Error deleting user:', error);
+        res.status(500).json({ message: 'Error deleting user' });
     }
 });
 
-app.patch('/user/:id', async (req, res) => {
-    try {
-        let id = req.params.id;
-        let updatedUser = req.body;
+app.patch('/user/:id', (req, res) => {
+    let id = req.params.id;
+    let updateUser = req.body;
 
-        const result = await conn.query('UPDATE users SET ? WHERE id = ?', [updatedUser, id]);
+    //  หา user ที่จาก id ส่งมา
+    let selectedIndex = users.findIndex(user => user.id == id);
 
-        res.json({
-            Message: 'User updated successfully',
-            data: result[0]
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+    // อัพเดตข้อมูล users
+    users[selectedIndex].firstname = updateUser.firstname || users[selectedIndex].firstname;
+    users[selectedIndex].lastname = updateUser.lastname || users[selectedIndex].lastname;
+
+    if (updateUser.firstname) {
+        users[selectedIndex].firstname = updateUser.firstname;
     }
-});
-
-app.delete('/users/:id', async (req, res) => {
-    try {
-        let id = req.params.id;
-        const result = await conn.query('DELETE FROM users WHERE id = ?', [id]);
-
-        res.json({
-            Message: 'User deleted successfully',
-            data: result[0]
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+    if (updateUser.lastname) {
+        users[selectedIndex].lastname = updateUser.lastname;
     }
-});
 
+    res.json({
+        message: 'User update successful',
+        data: {
+            user: updateUser,
+            indexUpdate: selectedIndex
+        }
+    });
+});
 app.listen(port, async () => {
-    await initMysql();
-    console.log(`Server is running on http://localhost:${port}`);
+    await initMySQL();
+    console.log(`Server running on http://localhost:${port}`);
 });
-
-/**ทำการ import โมดูล http
-const http = require('http');
-const host = 'localhost';
-const port = 8000;
-
-//กำหนดค่า server
-const requestListener = function (req, res) {
-    res.writeHead(200);
-    res.end('Hello, World! this is my first server.');
-}
-
-//run server
-const server = http.createServer(requestListener);
-server.listen(port, host, () => {
-    console.log(`Server is running on http://${host}:${port}`);
-});
-let users = [];
-let counter = 1;*/
